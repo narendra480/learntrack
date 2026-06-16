@@ -537,6 +537,11 @@ cron.schedule("0 21 * * *", () => sendBulkReminders("Evening (9 PM)"),   { timez
 console.log("⏰ Email reminders scheduled: 10AM, 3PM, 9PM IST");
 // Serve React frontend
 const path = require("path");
+app.get("/api/test", (req,res)=>{
+    res.json({
+        status:"API working"
+    });
+});
 
 app.use(express.static(path.join(__dirname, "dist")));
 
