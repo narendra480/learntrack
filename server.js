@@ -28,15 +28,13 @@ app.use(express.static("dist"));
 //   DB_HOST=localhost   DB_PORT=5432   DB_NAME=learntrack
 //   DB_USER=postgres    DB_PASSWORD=yourpassword
 const pool = new Pool({
-  host:     process.env.DB_HOST     || "localhost",
-  port:     process.env.DB_PORT     || 5432,
-  database: process.env.DB_NAME     || "learntrack",
-  user:     process.env.DB_USER     || "postgres",
-  password: process.env.DB_PASSWORD || "password",
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false
+    }
 });
-
 pool.connect((err) => {
-  if (err) console.error("❌ DB connection failed:", err.message);
+  if (err) console.error("❌ DB connection failed:", err);
   else     console.log("✅ Connected to PostgreSQL");
 });
 
@@ -91,7 +89,7 @@ const initDb = async () => {
     `);
     console.log("✅ Database tables are ready");
   } catch (err) {
-    console.error("❌ Failed to initialize database schema:", err.message);
+    console.error("❌ Failed to initialize database schema:", err);
   }
 };
 
