@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 
 // ─── API CONFIG ────────────────────────────────────────────────────────────────
-const API_BASE = "http://localhost:4000/api"; // Your backend URL
+const API_BASE = "https://learntrack-lg5l.onrender.com/api/auth/login"; 
+// Your backend URL
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const api = async (path, method = "GET", body = null) => {
