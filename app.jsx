@@ -615,18 +615,31 @@ function DashboardPage({ user, profile, onSelectCourse }) {
   const [courses, setCourses] = useState([]);
   const [stats, setStats] = useState({ completed: 0, inProgress: 0, notStarted: 0 });
 
+  const refreshCourses = async () => {
+    try {
+      const data = await api("/courses");
+      setCourses(data);
+      const completed = data.filter(c => c.status === "completed").length;
+      const inProgress = data.filter(c => c.status === "in-progress").length;
+      const notStarted = data.filter(c => c.status === "not-started").length;
+      setStats({ completed, inProgress, notStarted });
+    } catch { }
+  };
+
   useEffect(() => {
-    (async () => {
-      try {
-        const data = await api("/courses");
-        setCourses(data);
-        const completed = data.filter(c => c.status === "completed").length;
-        const inProgress = data.filter(c => c.status === "in-progress").length;
-        const notStarted = data.filter(c => c.status === "not-started").length;
-        setStats({ completed, inProgress, notStarted });
-      } catch { }
-    })();
+    refreshCourses();
   }, []);
+
+  const deleteCourse = async (id) => {
+    if (!confirm("Delete this course and its entries?")) return;
+    try {
+      await api(`/courses/${id}`, "DELETE");
+      setCourses(courses.filter(c => c.id !== id));
+      refreshCourses();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   const interested = profile?.interestedCourses?.split(",").map(s => s.trim()).filter(Boolean) || [];
 
@@ -680,18 +693,22 @@ function DashboardPage({ user, profile, onSelectCourse }) {
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>📚 Active Courses</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {courses.map(c => (
-              <div key={c.id} onClick={() => onSelectCourse(c.name)}
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "var(--surface2)", borderRadius: 10, cursor: "pointer", border: "1px solid var(--border)", transition: "border-color .2s" }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = "var(--accent)"}
-                onMouseLeave={e => e.currentTarget.style.borderColor = "var(--border)"}
-              >
-                <div>
+              <div key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "var(--surface2)", borderRadius: 10, border: "1px solid var(--border)", transition: "border-color .2s" }}>
+                <div style={{ flex: 1, cursor: "pointer" }} onClick={() => onSelectCourse(c.name)}
+                  onMouseEnter={e => e.currentTarget.parentElement.style.borderColor = "var(--accent)"}
+                  onMouseLeave={e => e.currentTarget.parentElement.style.borderColor = "var(--border)"}
+                >
                   <div style={{ fontWeight: 600 }}>{c.name}</div>
                   <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 2 }}>Started {new Date(c.created_at).toLocaleDateString()}</div>
                 </div>
-                <span className="tag" style={{ background: STATUS_COLORS[c.status] + "22", color: STATUS_COLORS[c.status] }}>
-                  {STATUS_LABELS[c.status]}
-                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span className="tag" style={{ background: STATUS_COLORS[c.status] + "22", color: STATUS_COLORS[c.status] }}>
+                    {STATUS_LABELS[c.status]}
+                  </span>
+                  <button className="btn-danger" style={{ padding: "6px 10px", fontSize: 12, borderRadius: 10 }} onClick={(e) => { e.stopPropagation(); deleteCourse(c.id); }}>
+                    Delete
+                  </button>
+                </div>
               </div>
             ))}
           </div>

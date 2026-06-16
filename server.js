@@ -20,6 +20,8 @@ const JWT_SECRET = process.env.JWT_SECRET || "learntrack_super_secret_2024";
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static("dist"));
 
 // ─── POSTGRESQL CONNECTION ──────────────────────────────────────────────────────
 // Set these in your .env file:
@@ -122,7 +124,7 @@ const auth = (req, res, next) => {
 
 // POST /api/auth/register
 app.post("/api/auth/register", async (req, res) => {
-  const { username, email, password } = req.body;
+  const { username, email, password } = req.body || {};
   if (!username || !email || !password)
     return res.status(400).json({ message: "All fields required" });
   try {
@@ -147,7 +149,7 @@ app.post("/api/auth/register", async (req, res) => {
 
 // POST /api/auth/login
 app.post("/api/auth/login", async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password } = req.body || {};
   try {
     const result = await pool.query("SELECT * FROM users WHERE username = $1", [username]);
     const user   = result.rows[0];
@@ -166,7 +168,7 @@ const crypto = require("crypto");
 
 // POST /api/auth/forgot-password
 app.post("/api/auth/forgot-password", async (req, res) => {
-  const { email } = req.body;
+  const { email } = req.body || {};
   try {
     const result = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
     // Always respond OK so we don't reveal if email exists
@@ -213,7 +215,7 @@ app.post("/api/auth/forgot-password", async (req, res) => {
 
 // POST /api/auth/forgot-username
 app.post("/api/auth/forgot-username", async (req, res) => {
-  const { email } = req.body;
+  const { email } = req.body || {};
   try {
     const result = await pool.query("SELECT username FROM users WHERE email = $1", [email]);
     if (result.rows.length === 0) return res.json({ ok: true });
@@ -249,7 +251,7 @@ app.post("/api/auth/forgot-username", async (req, res) => {
 
 // POST /api/auth/verify-reset-code
 app.post("/api/auth/verify-reset-code", async (req, res) => {
-  const { email, code } = req.body;
+  const { email, code } = req.body || {};
   try {
     const result = await pool.query(
       `SELECT rc.* FROM reset_codes rc
@@ -270,7 +272,7 @@ app.post("/api/auth/verify-reset-code", async (req, res) => {
 
 // POST /api/auth/reset-password
 app.post("/api/auth/reset-password", async (req, res) => {
-  const { resetToken, newPassword } = req.body;
+  const { resetToken, newPassword } = req.body || {};
   try {
     const decoded = jwt.verify(resetToken, JWT_SECRET);
     if (decoded.purpose !== "reset")
@@ -360,7 +362,7 @@ app.get("/api/profile", auth, async (req, res) => {
 
 // PUT /api/profile
 app.put("/api/profile", auth, async (req, res) => {
-  const { name, profession, bio, email, interestedCourses, completedCourses } = req.body;
+  const { name, profession, bio, email, interestedCourses, completedCourses } = req.body || {};
   await pool.query(`
     INSERT INTO profiles (user_id, name, profession, bio, email, interested_courses, completed_courses)
     VALUES ($1,$2,$3,$4,$5,$6,$7)
@@ -384,7 +386,8 @@ app.get("/api/courses", auth, async (req, res) => {
 
 // POST /api/courses/find-or-create
 app.post("/api/courses/find-or-create", auth, async (req, res) => {
-  const { name } = req.body;
+  const { name } = req.body || {};
+  if (!name) return res.status(400).json({ message: "Course name is required" });
   const existing = await pool.query(
     "SELECT * FROM courses WHERE user_id=$1 AND LOWER(name)=LOWER($2)",
     [req.user.id, name]
@@ -395,6 +398,21 @@ app.post("/api/courses/find-or-create", auth, async (req, res) => {
     [req.user.id, name]
   );
   res.json(result.rows[0]);
+});
+
+// DELETE /api/courses/:id
+app.delete("/api/courses/:id", auth, async (req, res) => {
+  const courseId = req.params.id;
+  try {
+    const result = await pool.query(
+      "DELETE FROM courses WHERE id=$1 AND user_id=$2 RETURNING id",
+      [courseId, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ message: "Course not found" });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
 // ─── ROUTES: ENTRIES ────────────────────────────────────────────────────────────
@@ -410,7 +428,7 @@ app.get("/api/courses/:id/entries", auth, async (req, res) => {
 
 // POST /api/courses/:id/entries
 app.post("/api/courses/:id/entries", auth, async (req, res) => {
-  const { date, topic, status, notes } = req.body;
+  const { date, topic, status, notes } = req.body || {};
   const result = await pool.query(
     "INSERT INTO entries (course_id, date, topic, status, notes) VALUES ($1,$2,$3,$4,$5) RETURNING *",
     [req.params.id, date, topic, status || "not-started", notes]
@@ -420,7 +438,7 @@ app.post("/api/courses/:id/entries", auth, async (req, res) => {
 
 // PATCH /api/entries/:id
 app.patch("/api/entries/:id", auth, async (req, res) => {
-  const { status } = req.body;
+  const { status } = req.body || {};
   await pool.query("UPDATE entries SET status=$1 WHERE id=$2", [status, req.params.id]);
   res.json({ ok: true });
 });
@@ -519,6 +537,16 @@ cron.schedule("0 15 * * *", () => sendBulkReminders("Afternoon (3 PM)"), { timez
 cron.schedule("0 21 * * *", () => sendBulkReminders("Evening (9 PM)"),   { timezone: "Asia/Kolkata" });
 
 console.log("⏰ Email reminders scheduled: 10AM, 3PM, 9PM IST");
+// Serve React frontend
+const path = require("path");
+
+app.use(express.static(path.join(__dirname, "dist")));
+
+app.get("/{*splat}", (req, res) => {
+  res.sendFile(path.join(__dirname, "dist", "index.html"));
+});
 
 // ─── START ──────────────────────────────────────────────────────────────────────
-app.listen(PORT, () => console.log(`🚀 LearnTrack API running on port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`🚀 LearnTrack API running on port ${PORT}`);
+});
